@@ -1,37 +1,55 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System;
 using System.Text;
+
 var builder = WebApplication.CreateBuilder(args);
-// DbContext
+
+// ---------------------------
+// Database Context
+// ---------------------------
 builder.Services.AddDbContext<AppDbContext>(options =>
-options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// ---------------------------
 // Controllers & Swagger
+// ---------------------------
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-// CORS - allow frontend origin (dev)
+
+// ---------------------------
+// CORS Configuration
+// ---------------------------
 builder.Services.AddCors(options =>
-2
 {
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
 });
-options.AddPolicy("AllowFrontend", policy =>
-{
-    policy.WithOrigins("http://localhost:3000")
-    .AllowAnyHeader()
-    .AllowAnyMethod();
-});
+
+// ---------------------------
 // JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"]!;
-var issuer = builder.Configuration["Jwt:Issuer"]!;
-var audience = builder.Configuration["Jwt:Audience"]!;
+// ---------------------------
+var jwtKey = builder.Configuration["Jwt:Key"];
+var issuer = builder.Configuration["Jwt:Issuer"];
+var audience = builder.Configuration["Jwt:Audience"];
+
+if (string.IsNullOrEmpty(jwtKey))
+{
+    throw new InvalidOperationException("JWT key is not configured in appsettings.json");
+}
+
 var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
 })
 .AddJwtBearer(options =>
 {
@@ -46,15 +64,22 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = key
     };
 });
+
+// ---------------------------
+// Build and Configure Pipeline
+// ---------------------------
 var app = builder.Build();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 app.Run();
